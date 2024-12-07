@@ -52,15 +52,3 @@ typedef struct {
 void uno_game(int numOfPlayer, Member* members);
 
 #endif // SERV1_H
-
-// pthread_t rooms[MAXROOM];			 // room's thread
-// int busy_rooms[MAXROOM];			 // non-empty room flag
-
-// RoomData room_datas[MAXROOM];		 // the user data pass from lobby to room
-// int room_check_flag[MAXROOM];		 // fast check flag for room
-// pthread_mutex_t mutex_room[MAXROOM]; // protect room_datas room_check_flag
-
-// int back_to_lobby_list[MAXCLIENT];	 // the user fd pass from room to lobby
-// int free_rooms[MAXROOM];			 // the empty room need to recycle
-// int check_flag = CHECK;				 // fast check flag
-// pthread_mutex_t mutex_free_list;	 // protect back_to_lobby_list, free_rooms, check_flag
