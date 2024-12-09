@@ -83,7 +83,7 @@ int* printHand(Player* player) {
     
 // }
 
-void uno_game(int numOfPlayer, Member* members){
+Status uno_game(int numOfPlayer, Member* members){
     Player* players = calloc(numOfPlayer, sizeof(Player));
     Card Deck[MAXCARD];
     Card top;
@@ -227,8 +227,9 @@ void uno_game(int numOfPlayer, Member* members){
     }
 
     free(players);
-
-    return;
+    Status status;
+    status.status = OK;
+    return status;
 }
 
 int main(){

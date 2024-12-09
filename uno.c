@@ -120,8 +120,9 @@ void printStatus(int numOfPlayer, Player* players, Member* members, Card top, in
     
 }
 
-void uno_game(int numOfPlayer, Member* members){
+Status uno_game(int numOfPlayer, Member* members){
     Player* players = calloc(numOfPlayer, sizeof(Player));
+    Status return_status;
     Card Deck[MAXCARD];
     Card top;
     int sptr = 0;
@@ -231,19 +232,25 @@ void uno_game(int numOfPlayer, Member* members){
         gettimeofday(&start, NULL);
         for(;player_time_used <= TIMEOUT;){
             FD_ZERO(&rset);
-            FD_SET(members[curPlayer].fd, &rset);
-            maxfdp = members[curPlayer].fd + 1;
+            int maxfd = 0;
+            for(int i = 0; i < MAXMEMBER; i++){
+                if(members[i].fd != 0){
+                    FD_SET(members[i].fd, &rset);
+                    maxfd = max(members[i].fd, maxfd);
+                }
+            }
+            maxfdp = maxfd + 1;
 		    tv.tv_sec = 1;
 		    tv.tv_usec = 0;
-
 		    Select(maxfdp, &rset, NULL, NULL, &tv);
             gettimeofday(&end, NULL);
             player_time_used = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         /* Deal the message from the current player*/
             if(FD_ISSET(members[curPlayer].fd, &rset)){
 				if((n = Read(members[curPlayer].fd, recvline, MAXLINE)) == 0) {
-					printf("Read error\n");
-					return;
+					return_status.status = DISCONN;
+                    return_status.index = curPlayer;
+					return return_status;
 				}
 				recvline[n] = '\0';
                 char *token = strtok(recvline, " \n");
@@ -303,6 +310,15 @@ void uno_game(int numOfPlayer, Member* members){
                     break;
                 }
             }
+            for(int i = 0; i < MAXMEMBER; i++){
+                if(i != curPlayer && FD_ISSET(members[i].fd, &rset)){
+                    if((n = Read(members[i].fd, recvline, MAXLINE)) == 0) {
+                        return_status.status = DISCONN;
+                        return_status.index = i;
+                        return return_status;
+                    }
+                }
+            }
         }
     /* Current player run out of its time */
         if(player_time_used > TIMEOUT){
@@ -348,5 +364,7 @@ void uno_game(int numOfPlayer, Member* members){
 
     free(players);
 
-    return;
+    return_status.status = OK;
+
+    return return_status;
 }

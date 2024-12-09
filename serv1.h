@@ -29,6 +29,9 @@
 #define DrawFour 	14
 #define MAXCARD		108
 
+#define OK 0
+#define DISCONN 1
+
 typedef struct {
 	char color;
 	int number;
@@ -50,6 +53,11 @@ typedef struct {
 	Member member[MAXMEMBER];
 }RoomData;
 
-void uno_game(int numOfPlayer, Member* members);
+typedef struct {
+	int status;
+	int index;
+}Status;
+
+Status uno_game(int numOfPlayer, Member* members);
 
 #endif // SERV1_H

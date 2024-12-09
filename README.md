@@ -18,6 +18,10 @@ make
 ```
 
 # Server Command
+Shoe clinet list and state
+```serv
+cli
+```
 Show the room state
 ```serv
 '\n' (press enter)
@@ -53,4 +57,4 @@ exit
 ```
 
 # Existing Problem
-1. Cannot Ctrl+C or Ctrl+D in room (server crash)
+~~1. Cannot Ctrl+C or Ctrl+D in room (server crash)~~

@@ -42,6 +42,60 @@ void check_data(int room_id){
 	}
 }
 
+void disconnect_in_room_handler(int room_id, fd_set *rset, int* maxfdp, int * numOfMember, Member* members, int index){
+	/* Notify other memberss*/
+		char msg[MAXLINE];
+		sprintf(msg, "(%s left the room. %d users left)\n", members[index].id, *numOfMember-1);
+		for(int j = 0; j < MAXMEMBER; j++) {
+			if(members[j].fd == 0 || index == j){
+				continue;
+			}
+			Writen(members[j].fd, msg, sizeof(msg));
+		}
+	/* Clear data in global */
+		pthread_mutex_lock(&mutex_room[room_id]);
+		room_datas[room_id].numOfMember--;
+		room_datas[room_id].member[index].fd = 0;
+		room_datas[room_id].member[index].id = NULL;
+		for(int i = 0; i < MAXMEMBER - 1; i++){
+			if(room_datas[room_id].member[i].fd == 0){
+				for(int j = i ; j < MAXMEMBER - 1; j++){
+					room_datas[room_id].member[j] = room_datas[room_id].member[j+1];
+				}
+			}
+		}
+		pthread_mutex_unlock(&mutex_room[room_id]);
+	/* Add it to close list */
+		pthread_mutex_lock(&mutex_close_list);
+		for (int k = 0; k < MAXCLIENT; k++){
+			if(close_list[k] == 0){
+				close_list[k] = members[index].fd;
+				break;
+			}
+		}
+		check_close_list_flag = UNCHECK;
+		pthread_mutex_unlock(&mutex_close_list);
+	/* Clear data in local*/
+		FD_CLR(members[index].fd, rset);
+		int maxfd = 0;
+		for(int j = 0; j < MAXMEMBER; j++) {
+			if(members[j].fd != 0){
+				maxfd = max(members[j].fd, maxfd);
+			}
+		}
+		*maxfdp = maxfd + 1;
+		*numOfMember = *numOfMember - 1;
+		members[index].fd = 0;
+		members[index].id = NULL;
+		for(int i = 0; i < MAXMEMBER - 1; i++){
+			if(members[i].fd == 0){
+				for(int j = i ; j < MAXMEMBER - 1; j++){
+					members[j] = members[j+1];
+				}
+			}
+		}
+}
+
 void* play_room(void* arg){
 	pthread_detach(pthread_self());
 
@@ -74,7 +128,7 @@ void* play_room(void* arg){
 			/* # of members enter > 0 */
 			if(room_check_back_to_lobby_list_flag[room_id] > 0){			
 				for(int i = MAXMEMBER-1; i >= 0; i--){		
-					/* copy the members data from global to local */ 
+					/* Copy the members data from global to local */ 
 					int newfd = room_datas[room_id].member[i].fd;
 					if(newfd != 0 && newfd != members[i].fd){
 						members[i].fd = newfd;
@@ -104,6 +158,7 @@ void* play_room(void* arg){
 				}
 			}
 		}
+/* Set the timer for select() (How long to check room_datas) */
 		tmp = rset;
 		tv.tv_sec = 1;
 		tv.tv_usec = 0;
@@ -113,57 +168,9 @@ void* play_room(void* arg){
 		for(int i = 0; i < MAXMEMBER; i++) {	
 			if(members[i].fd != 0 && FD_ISSET(members[i].fd, &tmp)){
 				if ( (n = Read(members[i].fd, buf, MAXLINE)) == 0) {
-				/* Notify other memberss*/
-					char msg[MAXLINE];
-					sprintf(msg, "(%s left the room. %d users left)\n", members[i].id, numOfMember-1);
-					for(int j = 0; j < MAXMEMBER; j++) {
-						if(members[j].fd == 0 || i == j){
-							continue;
-						}
-						Writen(members[j].fd, msg, sizeof(msg));
-					}
-				/* Clear data in global */
-					pthread_mutex_lock(&mutex_room[room_id]);
-					room_datas[room_id].numOfMember--;
-					room_datas[room_id].member[i].fd = 0;
-					room_datas[room_id].member[i].id = NULL;
-					for(int i = 0; i < MAXMEMBER - 1; i++){
-						if(room_datas[room_id].member[i].fd == 0){
-							for(int j = i ; j < MAXMEMBER - 1; j++){
-								room_datas[room_id].member[j] = room_datas[room_id].member[j+1];
-							}
-						}
-					}
-					pthread_mutex_unlock(&mutex_room[room_id]);
-				/* Add it to close list */
-					pthread_mutex_lock(&mutex_close_list);
-					for (int k = 0; k < MAXCLIENT; k++){
-						if(close_list[k] == 0){
-							close_list[k] = members[i].fd;
-							break;
-						}
-					}
-				    check_close_list_flag = UNCHECK;
-					pthread_mutex_unlock(&mutex_close_list);
-				/* Clear data in local*/
-					FD_CLR(members[i].fd, &rset);
-					int maxfd = 0;
-                    for(int j = 0; j < MAXMEMBER; j++) {
-                        if(members[j].fd != 0){
-                            maxfd = max(members[j].fd, maxfd);
-                        }
-                    }
-                    maxfdp = maxfd + 1;
-					numOfMember--;
-					members[i].fd = 0;
-					members[i].id = NULL;
-					for(int i = 0; i < MAXMEMBER - 1; i++){
-						if(members[i].fd == 0){
-							for(int j = i ; j < MAXMEMBER - 1; j++){
-								members[j] = members[j+1];
-							}
-						}
-					}
+					/* Deal client lost*/
+					disconnect_in_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, i);
+					break;
 				}
 				buf[n] = '\0';
 			/* Member exit room (back to lobby) */
@@ -221,7 +228,11 @@ void* play_room(void* arg){
 					}
 				}
 				else if(strcmp(buf, "start_uno\n\n") == 0){
-					uno_game(numOfMember, members);
+					Status status =  uno_game(numOfMember, members);
+					/* Deal client lost*/
+					if(status.status == DISCONN){
+						disconnect_in_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, status.index);
+					}
 				}
 				else{
 					char *usr_msg = malloc(strlen(members[i].id) + strlen(buf) + 4);
@@ -251,8 +262,6 @@ void* play_room(void* arg){
 
 	pthread_exit(NULL);
 }
-
-
 
 int main(int argc, char **argv)
 {
@@ -334,14 +343,19 @@ int main(int argc, char **argv)
             pthread_mutex_unlock(&mutex_back_to_lobby_list);
         }
 
-		/* Check whether someone goes back to lobby or room need to free */
+/* Check whether someone close the connection */
         if(pthread_mutex_trylock(&mutex_close_list) == 0){
             if(check_close_list_flag == UNCHECK){
                 for(int i = 0; i < MAXCLIENT; i++){
                     if (close_list[i] != 0){
 						Close(close_list[i]);
-						client_list[i] = 0;
-						in_lobby_flag[i] = false;
+						int j;
+						for(j = 0; j < MAXCLIENT; j++){
+							if(client_list[j] == close_list[i]) break;
+						}
+						client_list[j] = 0;
+						usr_id[j] = NULL;
+						in_lobby_flag[j] = false;
 						printf("Close Connection FD (%d)\n", close_list[i]);
 						close_list[i] = 0;
                     }
@@ -424,7 +438,7 @@ int main(int argc, char **argv)
 			}
 
 		}
-/* Process other users' messages */
+/* Process other clients' messages */
 		for(int i = 0; i < MAXCLIENT; i++) {	
 			if(client_list[i] != 0 && FD_ISSET(client_list[i], &tmp)){	
 				if ( (n = Read(client_list[i], buf, MAXLINE)) == 0) {
@@ -493,18 +507,21 @@ int main(int argc, char **argv)
 				else if(strcmp(token, "enter_room") == 0){
 					token = strtok(NULL, " \n");
 					if(token == NULL){
+						/* No specify room id*/
 						Writen(client_list[i], enter_room_error_msg1, strlen(enter_room_error_msg1));
 						continue;
 					}
 					int room_id = atoi(token);
 
 					if(room_id < 0 || room_id > MAXROOM - 1 || busy_rooms[room_id] == 0){
+						/* Room not exist */
 						Writen(client_list[i], enter_room_error_msg2, strlen(enter_room_error_msg2));
 						continue;
 					}
 					pthread_mutex_lock(&mutex_room[room_id]);
 					int num = room_datas[room_id].numOfMember;
 					if(num == 4){
+						/* Reach the maximum client of room */
 						pthread_mutex_unlock(&mutex_room[room_id]);
 						Writen(client_list[i], enter_room_error_msg3, strlen(enter_room_error_msg3));
 						continue;
