@@ -62,6 +62,8 @@ void disconnect_in_room_handler(int room_id, fd_set *rset, int* maxfdp, int * nu
 				for(int j = i ; j < MAXMEMBER - 1; j++){
 					room_datas[room_id].member[j] = room_datas[room_id].member[j+1];
 				}
+				room_datas[room_id].member[MAXMEMBER - 1].fd = 0;
+				room_datas[room_id].member[MAXMEMBER - 1].id = NULL;
 			}
 		}
 		pthread_mutex_unlock(&mutex_room[room_id]);
@@ -92,6 +94,8 @@ void disconnect_in_room_handler(int room_id, fd_set *rset, int* maxfdp, int * nu
 				for(int j = i ; j < MAXMEMBER - 1; j++){
 					members[j] = members[j+1];
 				}
+				members[MAXMEMBER - 1].fd = 0;
+				members[MAXMEMBER - 1].id = NULL;
 			}
 		}
 }
@@ -194,6 +198,8 @@ void* play_room(void* arg){
 							for(int j = i ; j < MAXMEMBER - 1; j++){
 								room_datas[room_id].member[j] = room_datas[room_id].member[j+1];
 							}
+							room_datas[room_id].member[MAXMEMBER - 1].fd = 0;
+							room_datas[room_id].member[MAXMEMBER - 1].id = NULL;
 						}
 					}
 					pthread_mutex_unlock(&mutex_room[room_id]);
@@ -224,6 +230,8 @@ void* play_room(void* arg){
 							for(int j = i ; j < MAXMEMBER - 1; j++){
 								members[j] = members[j+1];
 							}
+							members[MAXMEMBER - 1].fd = 0;
+							members[MAXMEMBER - 1].id = NULL;
 						}
 					}
 				}
@@ -286,7 +294,7 @@ int main(int argc, char **argv)
 
 	Listen(listenfd, LISTENQ);
 //#endregion
-	int curConn=0; 
+	int curConn = 0; 
     int client_list[MAXCLIENT];
     bool in_lobby_flag[MAXCLIENT];
 
@@ -404,7 +412,7 @@ int main(int argc, char **argv)
 			printf("New client FD: %d\n", connfd_tmp);
 
 			char msg[MAXLINE];
-			sprintf(msg, "Welcome to looby! You are the #%d user.\n", i+1);
+			sprintf(msg, "Welcome to lobby!\n You are the #%d user.\n", i+1);
 			Writen(client_list[i], msg, MAXLINE);
 
 			sprintf(msg, "(#%d user %s enters lobby)\n", i+1, usr_id[i]);
@@ -446,7 +454,7 @@ int main(int argc, char **argv)
 					Writen(client_list[i], bye_msg, strlen(bye_msg));
 					curConn--;
 					char msg[MAXLINE];
-					sprintf(msg, "(%s left the lobby. %d users left)\n", usr_id[i], curConn);
+					sprintf(msg, "(%s left the lobby.\n %d users left)\n", usr_id[i], curConn);
 					for(int j = 0; j < MAXCLIENT; j++) {
 						if(in_lobby_flag[j] == false || i == j){
 							continue;
