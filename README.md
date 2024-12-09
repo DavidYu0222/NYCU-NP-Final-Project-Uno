@@ -53,4 +53,8 @@ exit
 ```
 
 # Existing Problem
+<<<<<<< HEAD
 1. Cannot Ctrl+C or Ctrl+D in room (server crash)
+=======
+1. Cannot Ctrl+C or Ctrl+D in room (server crash)
+>>>>>>> dc24f2a59d68b18d8e41ae996f28df81ee48f1e0
