@@ -7,6 +7,7 @@
 #include	<sys/time.h>
 #include    <pthread.h>
 #include	<time.h>
+#include	<stdbool.h>
 
 #define MAXID 		50
 #define CHECK 		1
