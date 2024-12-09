@@ -1,6 +1,8 @@
 *.vscode
 
-*[!.]*
+serv
+cli
+standalone_uno
 
 # Object files
 *.o
@@ -12,10 +14,6 @@
 *.ilk
 *.map
 *.exp
-
-# Precompiled Headers
-*.gch
-*.pch
 
 # Libraries
 *.lib
