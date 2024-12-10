@@ -58,4 +58,4 @@ exit
 
 # Existing Problem
 ~~1. Cannot Ctrl+C or Ctrl+D in room (server crash)~~
-2. Client cannot enter room during game
+~~2. Client cannot enter room during game (Client will block)~~

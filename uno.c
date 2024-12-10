@@ -120,6 +120,18 @@ void printStatus(int numOfPlayer, Player* players, Member* members, Card top, in
     
 }
 
+bool isNumber(char *str) {
+    if (str == NULL || *str == '\0') return false;
+
+    while (*str) {
+        if (!isdigit((unsigned char)*str)) return false;
+        str++;
+    }
+    
+    return true; 
+}
+
+
 Status uno_game(int numOfPlayer, Member* members){
     Player* players = calloc(numOfPlayer, sizeof(Player));
     Status return_status;
@@ -140,8 +152,10 @@ Status uno_game(int numOfPlayer, Member* members){
     int       n;
 	char	  recvline[MAXLINE];
     char      sendline[MAXLINE];
-    char* invalid_error_msg0 = "Invalid Option\n";
-    char* invalid_error_msg1 = "Color or Number Not Match\n";
+    char* invalid_error_msg0 = "Invalid Option(Null String)\n";
+    char* invalid_error_msg1 = "Invalid Option(Not A Number)\n";
+    char* invalid_error_msg2 = "Invalid Option(Out Of Range)\n";
+    char* invalid_error_msg3 = "Color or Number Not Match\n";
     char* notified_msg0 = "\nYou Timeout\n";
     char* notified_msg1 = "\nYou Uno!\n";
     char* notified_msg2 = "\nYou Win!\n";
@@ -240,11 +254,13 @@ Status uno_game(int numOfPlayer, Member* members){
                 }
             }
             maxfdp = maxfd + 1;
+
 		    tv.tv_sec = 1;
 		    tv.tv_usec = 0;
 		    Select(maxfdp, &rset, NULL, NULL, &tv);
             gettimeofday(&end, NULL);
             player_time_used = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            
         /* Deal the message from the current player*/
             if(FD_ISSET(members[curPlayer].fd, &rset)){
 				if((n = Read(members[curPlayer].fd, recvline, MAXLINE)) == 0) {
@@ -257,13 +273,16 @@ Status uno_game(int numOfPlayer, Member* members){
                 if(token == NULL){
                     Writen(members[curPlayer].fd, invalid_error_msg0, strlen(invalid_error_msg0));
                     continue;
+                }else if(!isNumber(token)){
+                    Writen(members[curPlayer].fd, invalid_error_msg1, strlen(invalid_error_msg1));
+                    continue;
                 }
 				int opt = atoi(token);
                 if(opt == 0){
                     dealCard(Deck, &sptr, &players[curPlayer]);
                     break;
                 }else if(opt < 0 || opt > players[curPlayer].size ){
-                    Writen(members[curPlayer].fd, invalid_error_msg0, strlen(invalid_error_msg0));
+                    Writen(members[curPlayer].fd, invalid_error_msg2, strlen(invalid_error_msg2));
                 }else if(players[curPlayer].hand[optmap[opt]].color == 'N'){
                     char *token = strtok(NULL, " \n");
                     if(token == NULL){
@@ -286,7 +305,7 @@ Status uno_game(int numOfPlayer, Member* members){
                         Writen(members[curPlayer].fd, sendline, strlen(sendline));
                     }
                 }else if((players[curPlayer].hand[optmap[opt]].color != top.color) && (players[curPlayer].hand[optmap[opt]].number != top.number)){
-                    Writen(members[curPlayer].fd, invalid_error_msg1, strlen(invalid_error_msg1));
+                    Writen(members[curPlayer].fd, invalid_error_msg3, strlen(invalid_error_msg3));
                 }else{
                     if(players[curPlayer].hand[optmap[opt]].number == Skip){
                         skip = 1;

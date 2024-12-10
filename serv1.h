@@ -8,6 +8,7 @@
 #include    <pthread.h>
 #include	<time.h>
 #include	<stdbool.h>
+#include    <ctype.h>
 
 #define MAXID 		50
 #define CHECK 		1
@@ -32,6 +33,9 @@
 #define OK 0
 #define DISCONN 1
 
+#define IDLE false
+#define BUSY true
+
 typedef struct {
 	char color;
 	int number;
@@ -48,6 +52,7 @@ typedef struct {
 }Member;
 
 typedef struct {
+	bool status;
 	int id;
 	int numOfMember;
 	Member member[MAXMEMBER];

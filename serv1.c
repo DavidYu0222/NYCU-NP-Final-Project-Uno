@@ -1,26 +1,22 @@
 #include	"serv1.h"
 
-pthread_t rooms[MAXROOM];			 // room's thread
-int busy_rooms[MAXROOM];			 // non-empty room flag
-
 RoomData room_datas[MAXROOM];		 // the user data pass from lobby to room
-int room_check_back_to_lobby_list_flag[MAXROOM];		 // fast check flag for room
-pthread_mutex_t mutex_room[MAXROOM]; // protect room_datas room_check_back_to_lobby_list_flag
+int room_check_flag[MAXROOM];		 // fast check flag for room
+pthread_mutex_t mutex_room[MAXROOM]; // protect room_datas room_check_flag
 
 int back_to_lobby_list[MAXCLIENT];	 		// the user fd pass from room to lobby
 int free_rooms[MAXROOM];			 		// the empty room need to recycle
 int check_back_to_lobby_list_flag = CHECK;				 		// fast check flag
 pthread_mutex_t mutex_back_to_lobby_list;	// protect back_to_lobby_list, free_rooms, check_back_to_lobby_list_flag
 
-int close_list[MAXCLIENT];
+int close_list[MAXCLIENT];				// 
 int check_close_list_flag = CHECK;	
 pthread_mutex_t mutex_close_list;
 
 void init(){
 	bzero(back_to_lobby_list, sizeof(back_to_lobby_list));
-	bzero(busy_rooms, sizeof(busy_rooms));
 	bzero(room_datas, sizeof(room_datas));
-	bzero(room_check_back_to_lobby_list_flag, sizeof(room_check_back_to_lobby_list_flag));
+	bzero(room_check_flag, sizeof(room_check_flag));
 
 	for(int i = 0; i < MAXROOM; i++){
 		free_rooms[i] = -1;
@@ -130,15 +126,15 @@ void* play_room(void* arg){
 /* Check whether there exist new memberss want to enter */
 		if(numOfMember != MAXMEMBER && pthread_mutex_trylock(&mutex_room[room_id]) == 0){
 			/* # of members enter > 0 */
-			if(room_check_back_to_lobby_list_flag[room_id] > 0){			
+			if(room_check_flag[room_id] > 0){			
 				for(int i = MAXMEMBER-1; i >= 0; i--){		
 					/* Copy the members data from global to local */ 
 					int newfd = room_datas[room_id].member[i].fd;
 					if(newfd != 0 && newfd != members[i].fd){
 						members[i].fd = newfd;
 						members[i].id = room_datas[room_id].member[i].id;
-						room_check_back_to_lobby_list_flag[room_id]--;
-						flag[room_check_back_to_lobby_list_flag[room_id]] = i;
+						room_check_flag[room_id]--;
+						flag[room_check_flag[room_id]] = i;
 					}
 				}
 			}
@@ -236,11 +232,17 @@ void* play_room(void* arg){
 					}
 				}
 				else if(strcmp(buf, "start_uno\n\n") == 0){
+					pthread_mutex_lock(&mutex_room[room_id]);
+					room_datas[room_id].status = BUSY;
+					pthread_mutex_unlock(&mutex_room[room_id]);
 					Status status =  uno_game(numOfMember, members);
 					/* Deal client lost*/
 					if(status.status == DISCONN){
 						disconnect_in_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, status.index);
 					}
+					pthread_mutex_lock(&mutex_room[room_id]);
+					room_datas[room_id].status = IDLE;
+					pthread_mutex_unlock(&mutex_room[room_id]);
 				}
 				else{
 					char *usr_msg = malloc(strlen(members[i].id) + strlen(buf) + 4);
@@ -294,27 +296,30 @@ int main(int argc, char **argv)
 
 	Listen(listenfd, LISTENQ);
 //#endregion
-	int curConn = 0; 
-    int client_list[MAXCLIENT];
-    bool in_lobby_flag[MAXCLIENT];
+	pthread_t rooms[MAXROOM];			// room's thread
+	int       busy_rooms[MAXROOM];		// non-empty room flag
+	int       curConn = 0; 				// number of the current connections to server
+    int       client_list[MAXCLIENT];	// the fd of client
+    bool      in_lobby_flag[MAXCLIENT];	// flag record whether client is in lobby
+	char* 	  client_id[MAXCLIENT];		// store users' ID
 
+	bzero(busy_rooms, sizeof(busy_rooms));
 	bzero(&in_lobby_flag, sizeof(in_lobby_flag));
 	bzero(&client_list, sizeof(client_list));
-
-	char* 	  usr_id[MAXCLIENT];	// store users' ID
 
 	char* 	  bye_msg = "Bye!\n";
 	char*	  create_room_error_msg = "(CREATE ROOM FAIL!)\n";
 	char*	  enter_room_error_msg1 = "(Please specify the room id!)\n";
-	char*	  enter_room_error_msg2 = "(Room not exist!)\n";
-	char*	  enter_room_error_msg3 = "(Room is full!)\n";
+	char*	  enter_room_error_msg2 = "(This Room not exist!)\n";
+	char*	  enter_room_error_msg3 = "(This Room is full!)\n";
+	char*	  enter_room_error_msg4 = "(This Room is hosting a game !)\n";
 
 	int       maxfdp;
     fd_set    tmp, rset;
 	struct timeval tv;
 	char	  buf[MAXLINE];
 	char	  cmd[MAXLINE];
-
+/* Initialize global varible */
 	init();
 
 	FD_ZERO(&rset);
@@ -328,6 +333,7 @@ int main(int argc, char **argv)
                 for(int i = 0; i < MAXCLIENT; i++){
                     if (back_to_lobby_list[i] != 0){
 						FD_SET(back_to_lobby_list[i], &rset);
+						maxfdp = max(maxfdp - 1, back_to_lobby_list[i]) + 1;
 						for(int j = 0; j < MAXCLIENT; j++){
 							if(client_list[j] == back_to_lobby_list[i]){
 								in_lobby_flag[j] = true;
@@ -362,7 +368,7 @@ int main(int argc, char **argv)
 							if(client_list[j] == close_list[i]) break;
 						}
 						client_list[j] = 0;
-						usr_id[j] = NULL;
+						client_id[j] = NULL;
 						in_lobby_flag[j] = false;
 						printf("Close Connection FD (%d)\n", close_list[i]);
 						close_list[i] = 0;
@@ -392,12 +398,12 @@ int main(int argc, char **argv)
                     continue;
 			}
 
-			char* usr_id_tmp = malloc(MAXID);
-			if ( (n = Read(connfd_tmp, usr_id_tmp, MAXID)) == 0) {
+			char* client_id_tmp = malloc(MAXID);
+			if ( (n = Read(connfd_tmp, client_id_tmp, MAXID)) == 0) {
 				printf("Read error\n");
 				continue;
 			}
-			printf("New client ID: %s\n", usr_id_tmp);
+			printf("New client ID: %s\n", client_id_tmp);
 
 			int i;
 			for( i = 0; i < MAXCLIENT; i++) {
@@ -408,14 +414,14 @@ int main(int argc, char **argv)
 				}
 			}
 			curConn++;
-			usr_id[i] = usr_id_tmp;
+			client_id[i] = client_id_tmp;
 			printf("New client FD: %d\n", connfd_tmp);
 
 			char msg[MAXLINE];
 			sprintf(msg, "Welcome to lobby!\n You are the #%d user.\n", i+1);
 			Writen(client_list[i], msg, MAXLINE);
 
-			sprintf(msg, "(#%d user %s enters lobby)\n", i+1, usr_id[i]);
+			sprintf(msg, "(#%d user %s enters lobby)\n", i+1, client_id[i]);
 			for(int j = 0; j < MAXCLIENT; j++) {
 				if(in_lobby_flag[j] == false || i == j ){
 					continue;
@@ -425,6 +431,7 @@ int main(int argc, char **argv)
             FD_SET(client_list[i], &rset);
 			maxfdp = max(client_list[i], maxfdp - 1) + 1;
 		}
+/* Server status */
 		if(FD_ISSET(0, &tmp)){
 			char    sendline[MAXLINE];
     		Fgets(sendline, MAXLINE, stdin);
@@ -434,9 +441,9 @@ int main(int argc, char **argv)
 			if(strcmp(sendline, "cli\n") == 0){
 				for(int i = 0; i < MAXCLIENT; i++){
 					if(in_lobby_flag[i])
-						printf("%d: %d %s in lobby\n", i, client_list[i], usr_id[i]);
+						printf("%d: %d %s\tin lobby\n", i, client_list[i], client_id[i]);
 					else
-						printf("%d: %d %s not in lobby\n", i, client_list[i], usr_id[i]);
+						printf("%d: %d %s\tnot in lobby\n", i, client_list[i], client_id[i]);
 				}
 			}else{
 				for(int i = 0; i < MAXROOM; i++){
@@ -449,12 +456,12 @@ int main(int argc, char **argv)
 /* Process other clients' messages */
 		for(int i = 0; i < MAXCLIENT; i++) {	
 			if(client_list[i] != 0 && FD_ISSET(client_list[i], &tmp)){	
-				if ( (n = Read(client_list[i], buf, MAXLINE)) == 0) {
 			/* Connection interrupt */
+				if ( (n = Read(client_list[i], buf, MAXLINE)) == 0) {
 					Writen(client_list[i], bye_msg, strlen(bye_msg));
 					curConn--;
 					char msg[MAXLINE];
-					sprintf(msg, "(%s left the lobby.\n %d users left)\n", usr_id[i], curConn);
+					sprintf(msg, "(%s left the lobby.\n %d users left)\n", client_id[i], curConn);
 					for(int j = 0; j < MAXCLIENT; j++) {
 						if(in_lobby_flag[j] == false || i == j){
 							continue;
@@ -464,7 +471,7 @@ int main(int argc, char **argv)
                     FD_CLR(client_list[i], &rset);
 					Close(client_list[i]);
 					client_list[i] = 0;
-					usr_id[i] = NULL;
+					client_id[i] = NULL;
 					in_lobby_flag[i] = false;
                     int maxfd = listenfd;
                     for(int j = 0; j < MAXCLIENT; j++) {
@@ -475,6 +482,7 @@ int main(int argc, char **argv)
                     maxfdp = maxfd + 1;
 					continue;
 				}
+				
 				buf[n] = '\0';
 
 				strcpy(cmd, buf);
@@ -488,10 +496,11 @@ int main(int argc, char **argv)
 					for(int k = 0; k < MAXROOM; k++){
 						if(busy_rooms[k] == 0){
 							busy_rooms[k] = 1;
+							room_datas[k].status = IDLE;
 							room_datas[k].id = k;
 							room_datas[k].numOfMember = 1;
 							room_datas[k].member[0].fd = client_list[i];
-							room_datas[k].member[0].id=usr_id[i];
+							room_datas[k].member[0].id=client_id[i];
 							FD_CLR(client_list[i], &rset);
 							in_lobby_flag[i] = false;
 							int maxfd = listenfd;
@@ -527,22 +536,26 @@ int main(int argc, char **argv)
 						continue;
 					}
 					pthread_mutex_lock(&mutex_room[room_id]);
-					int num = room_datas[room_id].numOfMember;
-					if(num == 4){
+					if(room_datas[room_id].numOfMember == 4){
 						/* Reach the maximum client of room */
 						pthread_mutex_unlock(&mutex_room[room_id]);
 						Writen(client_list[i], enter_room_error_msg3, strlen(enter_room_error_msg3));
+						continue;
+					}else if(room_datas[room_id].status){
+						/* Game is going on in the room */
+						pthread_mutex_unlock(&mutex_room[room_id]);
+						Writen(client_list[i], enter_room_error_msg4, strlen(enter_room_error_msg4));
 						continue;
 					}
 					for (int j = 0; j < MAXMEMBER; j++){
 						if(room_datas[room_id].member[j].fd == 0){
 							room_datas[room_id].member[j].fd = client_list[i];
-							room_datas[room_id].member[j].id = usr_id[i];
+							room_datas[room_id].member[j].id = client_id[i];
 							break;
 						}
 					}
 					room_datas[room_id].numOfMember++;
-					room_check_back_to_lobby_list_flag[room_id]++;
+					room_check_flag[room_id]++;
 					FD_CLR(client_list[i], &rset);
 					int maxfd = listenfd;
                     for(int j = 0; j < MAXCLIENT; j++) {
@@ -556,10 +569,38 @@ int main(int argc, char **argv)
 					printf("Enter room %d\n", room_id);
 					pthread_mutex_unlock(&mutex_room[room_id]);
 				}
+			/* List the online client and room */
+				else if(strcmp(token, "-ls") == 0){
+					char sendline[MAXLINE];
+					sprintf(sendline, "Online List\n");
+					for(int j = 0; j < MAXCLIENT; j++){
+						char buf[MAXID + 30];
+						if(in_lobby_flag[j]){
+							sprintf(buf, "user %d:\t%s in lobby\n", j, client_id[j]);
+							strcat(sendline, buf);
+						}else if(client_id[j] != NULL) {
+							sprintf(buf, "user %d:\t%s not in lobby\n", j, client_id[j]);
+							strcat(sendline, buf);
+						}
+					}
+					bool flag = 1;
+					char* room_msg0 = "\nAvailable Room List\n";\
+					strcat(sendline, room_msg0);
+					for(int j = 0; j < MAXROOM; j++){
+						char buf[30];
+						if(busy_rooms[j]){
+							sprintf(buf, "room %d has %d clients\n", j, room_datas[j].numOfMember);
+							strcat(sendline, buf);
+							flag = 0;
+						}
+					}
+					if(flag) strcat(sendline, "NULL\n");
+					Writen(client_list[i], sendline, strlen(sendline));
+				}
 			/* Normal message passing */
 				else{
-					char *usr_msg = malloc(strlen(usr_id[i]) + strlen(buf) + 4);
-					sprintf(usr_msg, "(%s) %s", usr_id[i], buf);
+					char *usr_msg = malloc(strlen(client_id[i]) + strlen(buf) + 4);
+					sprintf(usr_msg, "(%s) %s", client_id[i], buf);
 
 					for(int j = 0; j < MAXCLIENT; j++) {
 						if(in_lobby_flag[j] == false || i == j){
