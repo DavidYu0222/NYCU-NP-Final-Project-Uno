@@ -34,11 +34,11 @@ void init(){
 void check_data(int room_id){
 	printf("room_id: %d\n", room_id);
 	for(int i = 0; i < MAXMEMBER; i++){
-		printf("id: %s, fd: %d\n", room_datas[room_id].member[i].id, room_datas[room_id].member[i].fd);
+		printf("id: %s\t, fd: %d\n", room_datas[room_id].member[i].id, room_datas[room_id].member[i].fd);
 	}
 }
 
-void disconnect_in_room_handler(int room_id, fd_set *rset, int* maxfdp, int * numOfMember, Member* members, int index){
+void exit_room_handler(int room_id, fd_set *rset, int* maxfdp, int* numOfMember, Member* members, int type,int index){
 	/* Notify other memberss*/
 		char msg[MAXLINE];
 		sprintf(msg, "(%s left the room. %d users left)\n", members[index].id, *numOfMember-1);
@@ -63,6 +63,8 @@ void disconnect_in_room_handler(int room_id, fd_set *rset, int* maxfdp, int * nu
 			}
 		}
 		pthread_mutex_unlock(&mutex_room[room_id]);
+	
+	if(type == DISCONN){
 	/* Add it to close list */
 		pthread_mutex_lock(&mutex_close_list);
 		for (int k = 0; k < MAXCLIENT; k++){
@@ -73,6 +75,19 @@ void disconnect_in_room_handler(int room_id, fd_set *rset, int* maxfdp, int * nu
 		}
 		check_close_list_flag = UNCHECK;
 		pthread_mutex_unlock(&mutex_close_list);
+	}else{
+	/* Add member's fd to back_to_lobby_list */
+		pthread_mutex_lock(&mutex_back_to_lobby_list);
+		for (int k = 0; k < MAXCLIENT; k++){
+			if(back_to_lobby_list[k] == 0){
+				back_to_lobby_list[k] = members[index].fd;
+				break;
+			}
+		}
+		check_back_to_lobby_list_flag = UNCHECK;
+		pthread_mutex_unlock(&mutex_back_to_lobby_list);
+	}
+	
 	/* Clear data in local*/
 		FD_CLR(members[index].fd, rset);
 		int maxfd = 0;
@@ -169,67 +184,13 @@ void* play_room(void* arg){
 			if(members[i].fd != 0 && FD_ISSET(members[i].fd, &tmp)){
 				if ( (n = Read(members[i].fd, buf, MAXLINE)) == 0) {
 					/* Deal client lost*/
-					disconnect_in_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, i);
+					exit_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, DISCONN, i);
 					break;
 				}
 				buf[n] = '\0';
 			/* Member exit room (back to lobby) */
 				if(strcmp(buf, "exit\n\n") == 0){
-				/* Notify other memberss*/
-					char msg[MAXLINE];
-					sprintf(msg, "(%s left the room. %d users left)\n", members[i].id, numOfMember-1);
-					for(int j = 0; j < MAXMEMBER; j++) {
-						if(members[j].fd == 0 || i == j){
-							continue;
-						}
-						Writen(members[j].fd, msg, sizeof(msg));
-					}
-				/* Clear data in global */
-					pthread_mutex_lock(&mutex_room[room_id]);
-					room_datas[room_id].numOfMember--;
-					room_datas[room_id].member[i].fd = 0;
-					room_datas[room_id].member[i].id = NULL;
-					for(int i = 0; i < MAXMEMBER - 1; i++){
-						if(room_datas[room_id].member[i].fd == 0){
-							for(int j = i ; j < MAXMEMBER - 1; j++){
-								room_datas[room_id].member[j] = room_datas[room_id].member[j+1];
-							}
-							room_datas[room_id].member[MAXMEMBER - 1].fd = 0;
-							room_datas[room_id].member[MAXMEMBER - 1].id = NULL;
-						}
-					}
-					pthread_mutex_unlock(&mutex_room[room_id]);
-				/* Add member's fd to back_to_lobby_list */
-					pthread_mutex_lock(&mutex_back_to_lobby_list);
-					for (int k = 0; k < MAXCLIENT; k++){
-						if(back_to_lobby_list[k] == 0){
-							back_to_lobby_list[k] = members[i].fd;
-							break;
-						}
-					}
-					check_back_to_lobby_list_flag = UNCHECK;
-					pthread_mutex_unlock(&mutex_back_to_lobby_list);
-				/* Clear data in local*/
-					FD_CLR(members[i].fd, &rset);
-					int maxfd = 0;
-                    for(int j = 0; j < MAXMEMBER; j++) {
-                        if(members[j].fd != 0){
-                            maxfd = max(members[j].fd, maxfd);
-                        }
-                    }
-                    maxfdp = maxfd + 1;
-					numOfMember--;
-					members[i].fd = 0;
-					members[i].id = NULL;
-					for(int i = 0; i < MAXMEMBER - 1; i++){
-						if(members[i].fd == 0){
-							for(int j = i ; j < MAXMEMBER - 1; j++){
-								members[j] = members[j+1];
-							}
-							members[MAXMEMBER - 1].fd = 0;
-							members[MAXMEMBER - 1].id = NULL;
-						}
-					}
+					exit_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, OK, i);
 				}
 				else if(strcmp(buf, "start_uno\n\n") == 0){
 					pthread_mutex_lock(&mutex_room[room_id]);
@@ -238,7 +199,7 @@ void* play_room(void* arg){
 					Status status =  uno_game(numOfMember, members);
 					/* Deal client lost*/
 					if(status.status == DISCONN){
-						disconnect_in_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, status.index);
+						exit_room_handler(room_id, &rset, &maxfdp, &numOfMember, members, DISCONN, status.index);
 					}
 					pthread_mutex_lock(&mutex_room[room_id]);
 					room_datas[room_id].status = IDLE;
@@ -304,8 +265,8 @@ int main(int argc, char **argv)
 	char* 	  client_id[MAXCLIENT];		// store users' ID
 
 	bzero(busy_rooms, sizeof(busy_rooms));
-	bzero(&in_lobby_flag, sizeof(in_lobby_flag));
-	bzero(&client_list, sizeof(client_list));
+	bzero(in_lobby_flag, sizeof(in_lobby_flag));
+	bzero(client_list, sizeof(client_list));
 
 	char* 	  bye_msg = "Bye!\n";
 	char*	  create_room_error_msg = "(CREATE ROOM FAIL!)\n";
@@ -576,10 +537,10 @@ int main(int argc, char **argv)
 					for(int j = 0; j < MAXCLIENT; j++){
 						char buf[MAXID + 30];
 						if(in_lobby_flag[j]){
-							sprintf(buf, "user %d:\t%s in lobby\n", j, client_id[j]);
+							sprintf(buf, "user %d: %s\tin lobby\n", j, client_id[j]);
 							strcat(sendline, buf);
 						}else if(client_id[j] != NULL) {
-							sprintf(buf, "user %d:\t%s not in lobby\n", j, client_id[j]);
+							sprintf(buf, "user %d: %s\tnot in lobby\n", j, client_id[j]);
 							strcat(sendline, buf);
 						}
 					}

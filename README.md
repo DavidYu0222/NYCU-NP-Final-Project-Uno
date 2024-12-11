@@ -18,14 +18,16 @@ make
 ```
 
 # Server Command
-Shoe clinet list and state
+Show clinet list and state
 ```serv
 cli
 ```
+
 Show the room state
 ```serv
 '\n' (press enter)
 ```
+
 Shutdown the server
 ```serv
 exit
@@ -39,23 +41,44 @@ Run the following commands to start the client
 You will in lobby after connecting to server
 
 # Clinet Command
+List the online clients
+```cli
+-ls
+```
+
 Create the room
 ```cli
 create_room
 ```
+
 Enter the room with room id
 ```cli
 enter_room <room_id>
 ```
+
 Start playing uno (in room)
 ```cli
 start_uno
 ```
+
 Exit room
 ```cli
 exit
 ```
 
-# Existing Problem
+Quit the game
+```cli
+quit
+```
+
+End the connection
+```cli
+Ctrl+C or Ctrl + D
+```
+
+# Existing Problem and To Do List
 ~~1. Cannot Ctrl+C or Ctrl+D in room (server crash)~~
+
 ~~2. Client cannot enter room during game (Client will block)~~
+
+3. Add login and register system

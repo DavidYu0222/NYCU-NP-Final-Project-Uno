@@ -163,7 +163,8 @@ Status uno_game(int numOfPlayer, Member* members){
     char* notified_msg4 = "\nYou draw two cards!";
     char* notified_msg5 = "\nYou draw four cards!";
     char* notified_msg6 = "\nYour turn is skipped!\n";
-    
+    char* notified_msg7 = "\nYou quit the game!\n";
+
     initDeck(Deck);
 
     shuffleDeck(Deck, MAXCARD);
@@ -270,6 +271,18 @@ Status uno_game(int numOfPlayer, Member* members){
 				}
 				recvline[n] = '\0';
                 char *token = strtok(recvline, " \n");
+                if(strcmp(token, "quit") == 0){
+                    for(int j = 0; j < numOfPlayer; j++){
+                        sprintf(sendline, "\nPlayer %d(%s) quit the game!\n", curPlayer+1, members[curPlayer].id);
+                        if(j == curPlayer){
+                            Writen(members[j].fd, notified_msg7, strlen(notified_msg7));
+                        }else{
+                            Writen(members[j].fd, sendline, strlen(sendline));
+                        }
+                    }
+                    return_status.status = OK;
+                    return return_status;
+                }
                 if(token == NULL){
                     Writen(members[curPlayer].fd, invalid_error_msg0, strlen(invalid_error_msg0));
                     continue;
@@ -329,11 +342,26 @@ Status uno_game(int numOfPlayer, Member* members){
                     break;
                 }
             }
+        /* Deal quit and disconnect request of other players*/
             for(int i = 0; i < MAXMEMBER; i++){
                 if(i != curPlayer && FD_ISSET(members[i].fd, &rset)){
                     if((n = Read(members[i].fd, recvline, MAXLINE)) == 0) {
                         return_status.status = DISCONN;
                         return_status.index = i;
+                        return return_status;
+                    }
+                    recvline[n] = '\0';
+                    char *token = strtok(recvline, " \n");
+                    if(strcmp(token, "quit") == 0){
+                        for(int j = 0; j < numOfPlayer; j++){
+                            sprintf(sendline, "\nPlayer %d(%s) quit the game!\n", i+1, members[i].id);
+                            if(j == i){
+                                Writen(members[j].fd, notified_msg7, strlen(notified_msg7));
+                            }else{
+                                Writen(members[j].fd, sendline, strlen(sendline));
+                            }
+                        }
+                        return_status.status = OK;
                         return return_status;
                     }
                 }
