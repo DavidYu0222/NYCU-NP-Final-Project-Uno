@@ -1,17 +1,21 @@
 #include	"serv1.h"
 
+LoginData login_list[MAXCLIENT];
+int check_login_list_flag = CHECK;
+pthread_mutex_t mutex_login_list;
+
 RoomData room_datas[MAXROOM];		 // the user data pass from lobby to room
 int room_check_flag[MAXROOM];		 // fast check flag for room
 pthread_mutex_t mutex_room[MAXROOM]; // protect room_datas room_check_flag
 
-int back_to_lobby_list[MAXCLIENT];	 		// the user fd pass from room to lobby
+int back_to_lobby_list[MAXCLIENT];	 		// the fd of user passed from room to lobby
 int free_rooms[MAXROOM];			 		// the empty room need to recycle
-int check_back_to_lobby_list_flag = CHECK;				 		// fast check flag
+int check_back_to_lobby_list_flag = CHECK;	// fast check flag
 pthread_mutex_t mutex_back_to_lobby_list;	// protect back_to_lobby_list, free_rooms, check_back_to_lobby_list_flag
 
-int close_list[MAXCLIENT];				// 
-int check_close_list_flag = CHECK;	
-pthread_mutex_t mutex_close_list;
+int close_list[MAXCLIENT];				// the fd of user who lost in room
+int check_close_list_flag = CHECK;		// fast check flag
+pthread_mutex_t mutex_close_list;		// protect close_list
 
 void init(){
 	bzero(back_to_lobby_list, sizeof(back_to_lobby_list));
@@ -234,6 +238,236 @@ void* play_room(void* arg){
 	pthread_exit(NULL);
 }
 
+int verify_login(char* id, char* password) {
+    FILE *file = fopen("userdata.txt", "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+
+    char line[2*MAXID + 2];
+    char username[MAXID];
+    char pass[MAXID];
+
+    while (fgets(line, sizeof(line), file)) {
+        if (sscanf(line, "%s %s", username, pass) == 2) {
+            if (strcmp(id, username) == 0){
+                if(strcmp(password, pass) == 0) {
+                    fclose(file);
+                    return MATCH;
+                }
+                fclose(file);
+                return PASSWD_NOT_MATCH;
+            }
+        }
+    }
+
+    fclose(file);
+    return USER_NOT_EXIST;
+}
+
+int is_username_unique(const char* id) {
+    FILE *file = fopen("userdata.txt", "r");
+    if (file == NULL) {
+        return -1;
+    }
+
+    char line[2*MAXID + 2];
+    char username[MAXID];
+
+    while (fgets(line, sizeof(line), file)) {
+        if (sscanf(line, "%s", username) == 1) {
+            if (strcmp(id, username) == 0) {
+                fclose(file);
+                return 0;
+            }
+        }
+    }
+
+    fclose(file);
+    return 1;
+}
+
+int add_user(char* id, char* password) {
+    FILE *file = fopen("userdata.txt", "a");
+    if (file == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+
+    if (fprintf(file, "%s %s\n", id, password) < 0) {
+        perror("Error writing to file");
+        fclose(file);
+        return -1;
+    }
+
+    fclose(file);
+    return 1;
+}
+
+void* login_system(void* arg){
+    pthread_detach(pthread_self());
+    LoginData* fdptr = (LoginData*) arg; 
+    int fd = fdptr->fd;
+    int login_id = fdptr->login_id;
+
+    int 	  n;
+	char	  buf[MAXLINE];
+	// int       maxfdp = fd + 1;
+    // fd_set    rset;
+	// struct timeval tv;
+
+    char*	  enter_msg = "Welcome to uno game lobby!\nChoose \"sign in(0)\" or \"sign up(1)\"\n";
+
+    char*     error_msg0 = "Invalid Option (0: sign in, 1: sign up)\n";
+    char*     error_msg1 = "Error: User Not Found\n";
+    char*     error_msg2 = "Error: Password Not Match\n";
+    char*     error_msg3 = "Error: Exceed the limitation of string length\n";
+
+    char*     sign_msg0 = "Username:\n";
+    char*     sign_msg1 = "Password:\n";
+    char*     sign_msg2 = "Type Username (Don't use space in your username, maximum 50 character):\n";
+    char*     sign_msg3 = "Type Password (Don't use space in your password, maximum 50 character):\n";
+    char*     sign_msg4 = "Retype Password:\n";
+    char*     sign_msg5 = "Login Success\n";
+
+    char*     id;
+    char      passwd[MAXID];
+
+    id = malloc(MAXID);
+
+    int status = CHOOSE_OPTION;
+    for(;status != LOGIN_SUCCESS;) {
+		Writen(fd, enter_msg, strlen(enter_msg));
+        if ( (n = Read(fd, buf, MAXLINE)) == 0) {
+            pthread_mutex_lock(&mutex_login_list);
+            login_list[login_id].fd = -1;
+            login_list[login_id].id = NULL;
+            login_list[login_id].login_id = login_id;
+            check_login_list_flag = UNCHECK;
+            pthread_mutex_unlock(&mutex_login_list);
+            Close(fd);
+            free(id);
+            pthread_exit(NULL);
+        }
+        buf[n] = '\0';
+        char* token = strtok(buf, " \n");
+        switch (status){
+        case CHOOSE_OPTION: // Choose Sign in or Sign up
+            if(token == NULL){
+                Writen(fd, error_msg0, strlen(error_msg0));
+                break;
+            }
+            int opt = atoi(token);
+            if(opt == 0){
+                status = SIGN_IN_USERNAME;
+                Writen(fd, sign_msg0, strlen(sign_msg0));
+            }else if(opt == 1){
+                status = SIGN_UP_USERNAME;
+                Writen(fd, sign_msg2, strlen(sign_msg2));
+            }else{
+                Writen(fd, error_msg0, strlen(error_msg0));
+            }
+            break;
+        case SIGN_IN_USERNAME: // Sign in (Username)
+            if(token == NULL || strlen(token) > MAXID){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg3, strlen(error_msg3));
+                break;
+            }
+            strcpy(id, token);
+            status = SIGN_IN_PASSWORD;
+            Writen(fd, sign_msg1, strlen(sign_msg1));
+            break;
+        case SIGN_IN_PASSWORD: // Sign in (Password)
+            if(token == NULL || strlen(token) > MAXID){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg3, strlen(error_msg3));
+                break;
+            }
+            strcpy(passwd, token);
+            int result = verify_login(id, passwd);
+            if(result == MATCH){
+                status = LOGIN_SUCCESS;
+                Writen(fd, sign_msg5, strlen(sign_msg5));
+            }else if(result == USER_NOT_EXIST){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg1, strlen(error_msg1));
+            }else if(result == PASSWD_NOT_MATCH){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg2, strlen(error_msg2));
+            }
+            break;
+        case SIGN_UP_USERNAME: // Sign up (Username)
+            if(token == NULL || strlen(token) > MAXID){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg3, strlen(error_msg3));
+                break;
+            }
+            strcpy(id, token);
+            if (!is_username_unique(id)) {
+                status = CHOOSE_OPTION;
+                sprintf(buf, "Error: Username '%s' already exists.\n", id);
+                Writen(fd, buf, strlen(buf));
+            }else{
+                status = SIGN_UP_PASSWORD;
+                Writen(fd, sign_msg3, strlen(sign_msg3));
+            }
+            break;
+        case SIGN_UP_PASSWORD: // Sign up (Password)
+            if(token == NULL || strlen(token) > MAXID){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg3, strlen(error_msg3));
+                break;
+            }
+            strcpy(passwd, token);
+            status = SIGN_UP_RETYPE;
+            Writen(fd, sign_msg4, strlen(sign_msg4));
+            break;
+        case SIGN_UP_RETYPE: // Sign up (Retype Password)
+            if(token == NULL || strlen(token) > MAXID){
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg3, strlen(error_msg3));
+                break;
+            }
+            char r_passwd[MAXID];
+            strcpy(r_passwd, token);
+            if(strcmp(passwd, r_passwd) == 0){
+                status = LOGIN_SUCCESS;
+                add_user(id, passwd);
+                Writen(fd, sign_msg5, strlen(sign_msg5));
+            }else{
+                status = CHOOSE_OPTION;
+                Writen(fd, error_msg3, strlen(error_msg3));
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    pthread_mutex_lock(&mutex_login_list);
+    login_list[login_id].fd = fd;
+    login_list[login_id].id = id;
+    login_list[login_id].login_id = login_id;
+    check_login_list_flag = UNCHECK;
+    pthread_mutex_unlock(&mutex_login_list);
+    pthread_exit(NULL);
+	// for(;;) {
+    //     FD_ZERO(&rset);
+    //     FD_SET(fd, &rset);
+
+    //     Select(maxfdp, &rset, NULL, NULL, NULL);
+
+    //     if(FD_ISSET(fd, &rset));{
+    //         if ( (n = Read(fd, buf, MAXLINE)) == 0) {
+    //             Close(fd);
+    //             return;
+    //         }
+    //     }
+    // }
+}
+
 int main(int argc, char **argv)
 {
 //#region initial bind
@@ -258,7 +492,9 @@ int main(int argc, char **argv)
 	Listen(listenfd, LISTENQ);
 //#endregion
 	pthread_t rooms[MAXROOM];			// room's thread
+	pthread_t login[MAXCLIENT];
 	int       busy_rooms[MAXROOM];		// non-empty room flag
+	int		  busy_login[MAXCLIENT];
 	int       curConn = 0; 				// number of the current connections to server
     int       client_list[MAXCLIENT];	// the fd of client
     bool      in_lobby_flag[MAXCLIENT];	// flag record whether client is in lobby
@@ -341,6 +577,52 @@ int main(int argc, char **argv)
             pthread_mutex_unlock(&mutex_close_list);
         }
 
+/* Check the login from login system */
+		if(pthread_mutex_trylock(&mutex_login_list) == 0){
+			if(check_login_list_flag == UNCHECK){
+				for(int k = 0; k < MAXCLIENT; k++) {
+					if(login_list[k].fd > 0){
+						int i;
+						for( i = 0; i < MAXCLIENT; i++) {
+							if(client_list[i] == 0){
+								client_list[i] = login_list[k].fd;
+								client_id[i] = login_list[k].id;
+								in_lobby_flag[i] = true;
+								break;
+							}
+						}
+						login_list[k].login_id = 0;
+						login_list[k].fd = 0;
+						login_list[k].id = NULL;
+						busy_login[login_list[k].login_id] = 0;
+						curConn++;
+						printf("New client FD: %d\n", login_list[k].fd);
+
+						char msg[MAXLINE];
+						sprintf(msg, "Welcome to lobby!\nYou are the #%d user.\n", i+1);
+						Writen(client_list[i], msg, MAXLINE);
+
+						sprintf(msg, "(#%d user %s enters lobby)\n", i+1, client_id[i]);
+						for(int j = 0; j < MAXCLIENT; j++) {
+							if(in_lobby_flag[j] == false || i == j ){
+								continue;
+							}
+							Writen(client_list[j], msg, MAXLINE);
+						}
+						FD_SET(client_list[i], &rset);
+						maxfdp = max(client_list[i], maxfdp - 1) + 1;
+					}
+					else if (login_list[k].fd < 0){
+						busy_login[k] = 0;
+						login_list[k].fd = 0;
+						login_list[k].login_id = 0;
+					}
+				}
+				check_login_list_flag = CHECK;
+			}
+			pthread_mutex_unlock(&mutex_login_list);
+		}
+
 		tmp = rset;
 		tv.tv_sec = 1;
 		tv.tv_usec = 0;
@@ -359,38 +641,22 @@ int main(int argc, char **argv)
                     continue;
 			}
 
-			char* client_id_tmp = malloc(MAXID);
+			char client_id_tmp[MAXID];
 			if ( (n = Read(connfd_tmp, client_id_tmp, MAXID)) == 0) {
 				printf("Read error\n");
 				continue;
 			}
-			printf("New client ID: %s\n", client_id_tmp);
-
-			int i;
-			for( i = 0; i < MAXCLIENT; i++) {
-				if(client_list[i] == 0){
-					client_list[i] = connfd_tmp;
-					in_lobby_flag[i] = true;
+			//printf("New client ID: %s\n", client_id_tmp);
+			for(int i = 0; i < MAXCLIENT; i++){
+				if(busy_login[i] == 0){
+					LoginData loginData;
+					loginData.login_id = i;
+					loginData.fd = connfd_tmp;
+					pthread_create(&login[i], NULL, login_system, &loginData);
+					busy_login[i] = 1;
 					break;
 				}
 			}
-			curConn++;
-			client_id[i] = client_id_tmp;
-			printf("New client FD: %d\n", connfd_tmp);
-
-			char msg[MAXLINE];
-			sprintf(msg, "Welcome to lobby!\n You are the #%d user.\n", i+1);
-			Writen(client_list[i], msg, MAXLINE);
-
-			sprintf(msg, "(#%d user %s enters lobby)\n", i+1, client_id[i]);
-			for(int j = 0; j < MAXCLIENT; j++) {
-				if(in_lobby_flag[j] == false || i == j ){
-					continue;
-				}
-				Writen(client_list[j], msg, MAXLINE);
-			}
-            FD_SET(client_list[i], &rset);
-			maxfdp = max(client_list[i], maxfdp - 1) + 1;
 		}
 /* Server status */
 		if(FD_ISSET(0, &tmp)){
@@ -406,7 +672,12 @@ int main(int argc, char **argv)
 					else
 						printf("%d: %d %s\tnot in lobby\n", i, client_list[i], client_id[i]);
 				}
-			}else{
+			}else if(strcmp(sendline, "login\n") == 0){
+				for(int i = 0; i < MAXCLIENT; i++){
+					printf("%d: busy_login %d\n", i, busy_login[i]);
+				}
+			}
+			else{
 				for(int i = 0; i < MAXROOM; i++){
 					check_data(i);
 					printf("\n");
@@ -422,7 +693,7 @@ int main(int argc, char **argv)
 					Writen(client_list[i], bye_msg, strlen(bye_msg));
 					curConn--;
 					char msg[MAXLINE];
-					sprintf(msg, "(%s left the lobby.\n %d users left)\n", client_id[i], curConn);
+					sprintf(msg, "(%s left the lobby. %d users left)\n", client_id[i], curConn);
 					for(int j = 0; j < MAXCLIENT; j++) {
 						if(in_lobby_flag[j] == false || i == j){
 							continue;
@@ -558,6 +829,10 @@ int main(int argc, char **argv)
 					if(flag) strcat(sendline, "NULL\n");
 					Writen(client_list[i], sendline, strlen(sendline));
 				}
+				// else if(strcmp(token, "login") == 0){
+				// 	pthread_create(&login, NULL, login_system, &client_list[i]);
+				// 	FD_CLR(client_list[i], &rset);
+				// }
 			/* Normal message passing */
 				else{
 					char *usr_msg = malloc(strlen(client_id[i]) + strlen(buf) + 4);

@@ -23,6 +23,11 @@ Show clinet list and state
 cli
 ```
 
+Show login system state
+```serv
+login
+```
+
 Show the room state
 ```serv
 '\n' (press enter)
@@ -81,4 +86,4 @@ Ctrl+C or Ctrl + D
 
 ~~2. Client cannot enter room during game (Client will block)~~
 
-3. Add login and register system
+~~3. Add login and register system~~

@@ -2,6 +2,7 @@
 #define SERV1_H
 
 #include	"unp.h"
+#include    <stdio.h>
 #include	"string.h"
 #include	<sys/socket.h>
 #include	<sys/time.h>
@@ -10,14 +11,13 @@
 #include	<stdbool.h>
 #include    <ctype.h>
 
-#define MAXID 		50
-#define CHECK 		1
-#define UNCHECK 	0
-
+// Server setting constant
 #define MAXCLIENT 	10
 #define MAXROOM 	5
 #define MAXMEMBER 	4
+#define MAXID 		50
 
+// Game constant
 #define Clockwise	1
 #define CounterClokewise -1
 
@@ -30,11 +30,31 @@
 #define DrawFour 	14
 #define MAXCARD		108
 
-#define OK 0
-#define DISCONN 1
+// Check flag
+#define CHECK 		1
+#define UNCHECK 	0
 
+// Struct Status.status
+#define OK 			0
+#define DISCONN 	1
+
+// Struct RoomData.status
 #define IDLE false
 #define BUSY true
+
+// Verify login
+#define MATCH 				0
+#define USER_NOT_EXIST 		1
+#define PASSWD_NOT_MATCH 	2
+
+// login system status (FSM)
+#define CHOOSE_OPTION 	 0
+#define SIGN_IN_USERNAME 1
+#define SIGN_IN_PASSWORD 2
+#define SIGN_UP_USERNAME 3
+#define SIGN_UP_PASSWORD 4
+#define SIGN_UP_RETYPE   5
+#define LOGIN_SUCCESS    6 
 
 typedef struct {
 	char color;
@@ -57,6 +77,12 @@ typedef struct {
 	int numOfMember;
 	Member member[MAXMEMBER];
 }RoomData;
+
+typedef struct {
+	int login_id;
+	int fd;
+	char* id;
+}LoginData;
 
 typedef struct {
 	int status;
