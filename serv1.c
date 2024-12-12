@@ -335,10 +335,10 @@ void* login_system(void* arg){
     char      passwd[MAXID];
 
     id = malloc(MAXID);
+	Writen(fd, enter_msg, strlen(enter_msg));
 
     int status = CHOOSE_OPTION;
     for(;status != LOGIN_SUCCESS;) {
-		Writen(fd, enter_msg, strlen(enter_msg));
         if ( (n = Read(fd, buf, MAXLINE)) == 0) {
             pthread_mutex_lock(&mutex_login_list);
             login_list[login_id].fd = -1;
@@ -356,6 +356,7 @@ void* login_system(void* arg){
         case CHOOSE_OPTION: // Choose Sign in or Sign up
             if(token == NULL){
                 Writen(fd, error_msg0, strlen(error_msg0));
+				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
             }
             int opt = atoi(token);
@@ -373,6 +374,7 @@ void* login_system(void* arg){
             if(token == NULL || strlen(token) > MAXID){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg3, strlen(error_msg3));
+				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
             }
             strcpy(id, token);
@@ -383,6 +385,7 @@ void* login_system(void* arg){
             if(token == NULL || strlen(token) > MAXID){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg3, strlen(error_msg3));
+				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
             }
             strcpy(passwd, token);
@@ -393,15 +396,18 @@ void* login_system(void* arg){
             }else if(result == USER_NOT_EXIST){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg1, strlen(error_msg1));
+				Writen(fd, enter_msg, strlen(enter_msg));
             }else if(result == PASSWD_NOT_MATCH){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg2, strlen(error_msg2));
+				Writen(fd, enter_msg, strlen(enter_msg));
             }
             break;
         case SIGN_UP_USERNAME: // Sign up (Username)
             if(token == NULL || strlen(token) > MAXID){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg3, strlen(error_msg3));
+				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
             }
             strcpy(id, token);
@@ -409,6 +415,7 @@ void* login_system(void* arg){
                 status = CHOOSE_OPTION;
                 sprintf(buf, "Error: Username '%s' already exists.\n", id);
                 Writen(fd, buf, strlen(buf));
+				Writen(fd, enter_msg, strlen(enter_msg));
             }else{
                 status = SIGN_UP_PASSWORD;
                 Writen(fd, sign_msg3, strlen(sign_msg3));
@@ -418,6 +425,7 @@ void* login_system(void* arg){
             if(token == NULL || strlen(token) > MAXID){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg3, strlen(error_msg3));
+				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
             }
             strcpy(passwd, token);
@@ -428,6 +436,7 @@ void* login_system(void* arg){
             if(token == NULL || strlen(token) > MAXID){
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg3, strlen(error_msg3));
+				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
             }
             char r_passwd[MAXID];
@@ -439,6 +448,7 @@ void* login_system(void* arg){
             }else{
                 status = CHOOSE_OPTION;
                 Writen(fd, error_msg3, strlen(error_msg3));
+				Writen(fd, enter_msg, strlen(enter_msg));
             }
             break;
         default:
