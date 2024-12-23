@@ -58,6 +58,7 @@ int* printHand(Player* player, int fd) {
         if(color == '\0'){
             continue;
         }
+        //sprintf(buf, "%c %d,", color, number);
         else if(color == 'R' || color == 'G' || color == 'B' || color == 'Y'){
             if(number == DrawTwo)
                 sprintf(buf, "%d: %c DrawTwo\n", index, color);
@@ -152,18 +153,18 @@ Status uno_game(int numOfPlayer, Member* members){
     int       n;
 	char	  recvline[MAXLINE];
     char      sendline[MAXLINE];
-    char* invalid_error_msg0 = "Invalid Option(Null String)\n";
-    char* invalid_error_msg1 = "Invalid Option(Not A Number)\n";
-    char* invalid_error_msg2 = "Invalid Option(Out Of Range)\n";
-    char* invalid_error_msg3 = "Color or Number Not Match\n";
-    char* notified_msg0 = "\nYou Timeout\n";
-    char* notified_msg1 = "\nYou Uno!\n";
-    char* notified_msg2 = "\nYou Win!\n";
-    char* notified_msg3 = "\nNow is Your turn!\n";
-    char* notified_msg4 = "\nYou draw two cards!";
-    char* notified_msg5 = "\nYou draw four cards!";
-    char* notified_msg6 = "\nYour turn is skipped!\n";
-    char* notified_msg7 = "\nYou quit the game!\n";
+    char* invalid_error_msg0 = "Error: Invalid Option(Null String)\n";
+    char* invalid_error_msg1 = "Error: Invalid Option(Not A Number)\n";
+    char* invalid_error_msg2 = "Error: Invalid Option(Out Of Range)\n";
+    char* invalid_error_msg3 = "Error: Color or Number Not Match\n";
+    char* notified_msg0 = "br\nYou Timeout\n";
+    char* notified_msg1 = "br\nYou Uno!\n";
+    char* notified_msg2 = "br\nYou Win!\n";
+    char* notified_msg3 = "br\nNow is Your turn!\n";
+    char* notified_msg4 = "br\nYou draw two cards!";
+    char* notified_msg5 = "br\nYou draw four cards!";
+    char* notified_msg6 = "br\nYour turn is skipped!\n";
+    char* notified_msg7 = "br\nYou quit the game!\n";
 
     initDeck(Deck);
 
@@ -187,7 +188,7 @@ Status uno_game(int numOfPlayer, Member* members){
     while(gameover != 1){
     /* Deal Skip and DrawTwo (played by the previous player)*/
         if(drawTwo == 1){
-            sprintf(sendline, "\nPlayer %d(%s) draw two", curPlayer+1, members[curPlayer].id);
+            sprintf(sendline, "br\nPlayer %d(%s) draw two", curPlayer+1, members[curPlayer].id);
             for(int i = 0; i < numOfPlayer; i++){
                 if(i == curPlayer){
                     Writen(members[i].fd, notified_msg4, strlen(notified_msg4));
@@ -200,7 +201,7 @@ Status uno_game(int numOfPlayer, Member* members){
             dealCard(Deck, &sptr, &players[curPlayer]);
         }
         if(drawFour == 1){
-            sprintf(sendline, "\nPlayer %d(%s) draw four", curPlayer+1, members[curPlayer].id);
+            sprintf(sendline, "br\nPlayer %d(%s) draw four", curPlayer+1, members[curPlayer].id);
             for(int i = 0; i < numOfPlayer; i++){
                 if(i == curPlayer){
                     Writen(members[i].fd, notified_msg5, strlen(notified_msg5));
@@ -215,7 +216,7 @@ Status uno_game(int numOfPlayer, Member* members){
             dealCard(Deck, &sptr, &players[curPlayer]);
         }
         if(skip == 1){
-            sprintf(sendline, "\nPlayer %d(%s)'s turn is skipped!\n", curPlayer+1, members[curPlayer].id);
+            sprintf(sendline, "br\nPlayer %d(%s)'s turn is skipped!\n", curPlayer+1, members[curPlayer].id);
             for(int i = 0; i < numOfPlayer; i++){
                 if(i == curPlayer){
                     Writen(members[i].fd, notified_msg6, strlen(notified_msg6));
@@ -229,7 +230,7 @@ Status uno_game(int numOfPlayer, Member* members){
             continue;
         }
     /* Notify players whose turn it is now */
-        sprintf(sendline, "\nNow is Player %d(%s)'s turn!\n", curPlayer+1, members[curPlayer].id);
+        sprintf(sendline, "br\nNow is Player %d(%s)'s turn!\n", curPlayer+1, members[curPlayer].id);
         for(int i = 0; i < numOfPlayer; i++){
             if(i == curPlayer){
                 Writen(members[i].fd, notified_msg3, strlen(notified_msg3));
@@ -271,9 +272,13 @@ Status uno_game(int numOfPlayer, Member* members){
 				}
 				recvline[n] = '\0';
                 char *token = strtok(recvline, " \n");
-                if(strcmp(token, "quit") == 0){
+                
+                if(token == NULL){
+                    Writen(members[curPlayer].fd, invalid_error_msg0, strlen(invalid_error_msg0));
+                    continue;
+                }else if(strcmp(token, "quit") == 0){
                     for(int j = 0; j < numOfPlayer; j++){
-                        sprintf(sendline, "\nPlayer %d(%s) quit the game!\n", curPlayer+1, members[curPlayer].id);
+                        sprintf(sendline, "br\nPlayer %d(%s) quit the game!\n", curPlayer+1, members[curPlayer].id);
                         if(j == curPlayer){
                             Writen(members[j].fd, notified_msg7, strlen(notified_msg7));
                         }else{
@@ -282,10 +287,6 @@ Status uno_game(int numOfPlayer, Member* members){
                     }
                     return_status.status = OK;
                     return return_status;
-                }
-                if(token == NULL){
-                    Writen(members[curPlayer].fd, invalid_error_msg0, strlen(invalid_error_msg0));
-                    continue;
                 }else if(!isNumber(token)){
                     Writen(members[curPlayer].fd, invalid_error_msg1, strlen(invalid_error_msg1));
                     continue;
@@ -314,7 +315,7 @@ Status uno_game(int numOfPlayer, Member* members){
                         players[curPlayer].size--;
                         break;
                     }else{
-                        sprintf(sendline, "\"%s\" is not a valid color\n", token);
+                        sprintf(sendline, "Error: \"%s\" is not a valid color\n", token);
                         Writen(members[curPlayer].fd, sendline, strlen(sendline));
                     }
                 }else if((players[curPlayer].hand[optmap[opt]].color != top.color) && (players[curPlayer].hand[optmap[opt]].number != top.number)){
@@ -354,7 +355,7 @@ Status uno_game(int numOfPlayer, Member* members){
                     char *token = strtok(recvline, " \n");
                     if(strcmp(token, "quit") == 0){
                         for(int j = 0; j < numOfPlayer; j++){
-                            sprintf(sendline, "\nPlayer %d(%s) quit the game!\n", i+1, members[i].id);
+                            sprintf(sendline, "br\nPlayer %d(%s) quit the game!\n", i+1, members[i].id);
                             if(j == i){
                                 Writen(members[j].fd, notified_msg7, strlen(notified_msg7));
                             }else{
@@ -370,7 +371,7 @@ Status uno_game(int numOfPlayer, Member* members){
     /* Current player run out of its time */
         if(player_time_used > TIMEOUT){
             dealCard(Deck, &sptr, &players[curPlayer]);
-            sprintf(sendline, "\nPlayer %d(%s) Timeout\n", curPlayer+1, members[curPlayer].id);
+            sprintf(sendline, "br\nPlayer %d(%s) Timeout\n", curPlayer+1, members[curPlayer].id);
             for(int i = 0; i < numOfPlayer; i++){
                 if(i == curPlayer){
                     Writen(members[i].fd, notified_msg0, strlen(notified_msg0));
@@ -381,7 +382,7 @@ Status uno_game(int numOfPlayer, Member* members){
         }
     /* Check whether the current player uno */
         if(players[curPlayer].size == 1){
-            sprintf(sendline, "\nPlayer %d(%s) Uno!\n", curPlayer+1, members[curPlayer].id);
+            sprintf(sendline, "br\nPlayer %d(%s) Uno!\n", curPlayer+1, members[curPlayer].id);
             for(int i = 0; i < numOfPlayer; i++){
                 if(i == curPlayer){
                     Writen(members[i].fd, notified_msg1, strlen(notified_msg1));
@@ -393,7 +394,7 @@ Status uno_game(int numOfPlayer, Member* members){
     /* Check gameover*/
         if(players[curPlayer].size == 0){
             gameover = 1;
-            sprintf(sendline, "\nPlayer %d(%s) Win!\n", curPlayer+1, members[curPlayer].id);
+            sprintf(sendline, "br\nPlayer %d(%s) Win!\n", curPlayer+1, members[curPlayer].id);
             for(int i = 0; i < numOfPlayer; i++){
                 if(i == curPlayer){
                     Writen(members[i].fd, notified_msg2, strlen(notified_msg2));

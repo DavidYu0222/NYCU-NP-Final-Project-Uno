@@ -1,10 +1,11 @@
 #include	"unp.h"
 #include  <string.h>
 #include  <stdio.h>
+#include  <stdlib.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-char id[MAXLINE];
+char* id = "handshake";
 
 /* the following two functions use ANSI Escape Sequence */
 /* refer to https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 */
@@ -28,11 +29,7 @@ void xchg_data(FILE *fp, int sockfd)
 	set_scr();
 	clr_scr();
     Writen(sockfd, id, strlen(id));
-    printf("sent: %s\n", id);
-	readline(sockfd, recvline, MAXLINE);
-	printf("recv: %s", recvline);
-	readline(sockfd, recvline, MAXLINE);
-	printf("recv: %s", recvline);	
+    //printf("sent: %s\n", id);
     stdineof = 0;
 	peer_exit = 0;
 
@@ -63,7 +60,26 @@ void xchg_data(FILE *fp, int sockfd)
             }
 			else if (n > 0) {
 				recvline[n] = '\0';
-				printf("\x1B[0;36m%s\x1B[0m", recvline);
+				char *line, *token;
+				char *lineSavePtr, *tokenSavePtr;
+
+				line = strtok_r(recvline, "\n", &lineSavePtr);
+				while(line != NULL){
+					char tmp[MAXLINE];
+					strcpy(tmp, line);
+					token = strtok_r(tmp, " ", &tokenSavePtr);
+					if(line[0] == '('){
+						printf("\x1B[0;36m%s\n\x1B[0m", line);
+					}else if(strcmp(line, "br") == 0){
+						printf("\n");
+					}else if(strcmp(token, "Error:") == 0){
+						printf("\x1B[0;91m%s\n\x1B[0m", line);
+					}else{
+						printf("\x1B[0;93m%s\n\x1B[0m", line);
+					}
+					line = strtok_r(NULL, "\n", &lineSavePtr);
+				}
+				
 				fflush(stdout);
 			}
 			else { // n < 0
@@ -98,16 +114,15 @@ main(int argc, char **argv)
 	int					sockfd;
 	struct sockaddr_in	servaddr;
 
-	if (argc != 3)
-		err_quit("usage: tcpcli <IPaddress> <ID>");
+	if (argc != 2)
+		err_quit("usage: tcpcli <IPaddress>");
 
 	sockfd = Socket(AF_INET, SOCK_STREAM, 0);
 
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(SERV_PORT+5);
+	servaddr.sin_port = htons(SERV_PORT+6);
 	Inet_pton(AF_INET, argv[1], &servaddr.sin_addr);
-	strcpy(id, argv[2]);
 
 	Connect(sockfd, (SA *) &servaddr, sizeof(servaddr));
 

@@ -319,7 +319,7 @@ void* login_system(void* arg){
 
     char*	  enter_msg = "Welcome to uno game lobby!\nChoose \"sign in(0)\" or \"sign up(1)\"\n";
 
-    char*     error_msg0 = "Invalid Option (0: sign in, 1: sign up)\n";
+    char*     error_msg0 = "Error: Invalid Option (0: sign in, 1: sign up)\n";
     char*     error_msg1 = "Error: User Not Found\n";
     char*     error_msg2 = "Error: Password Not Match\n";
     char*     error_msg3 = "Error: Exceed the limitation of string length\n";
@@ -354,7 +354,7 @@ void* login_system(void* arg){
         char* token = strtok(buf, " \n");
         switch (status){
         case CHOOSE_OPTION: // Choose Sign in or Sign up
-            if(token == NULL){
+            if(token == NULL || !isNumber(token)){
                 Writen(fd, error_msg0, strlen(error_msg0));
 				Writen(fd, enter_msg, strlen(enter_msg));
                 break;
@@ -447,7 +447,7 @@ void* login_system(void* arg){
                 Writen(fd, sign_msg5, strlen(sign_msg5));
             }else{
                 status = CHOOSE_OPTION;
-                Writen(fd, error_msg3, strlen(error_msg3));
+                Writen(fd, error_msg2, strlen(error_msg2));
 				Writen(fd, enter_msg, strlen(enter_msg));
             }
             break;
@@ -480,6 +480,24 @@ void* login_system(void* arg){
 
 int main(int argc, char **argv)
 {
+	FILE *file;
+    const char *filename = "userdata.txt";
+
+	file = fopen(filename, "r");
+    if (file != NULL) {
+        // File exists, do not overwrite
+        fclose(file);
+        printf("File '%s' already exists.\n", filename);
+    }else{
+		printf("File '%s' doesn't exist. Create one.\n", filename);
+		file = fopen(filename, "w");
+		if (file == NULL) {
+        	perror("Error create \"userdata.txt\" file");
+        	return EXIT_FAILURE;
+    	}
+		fclose(file);
+	}
+
 //#region initial bind
 	int					listenfd;
 	int 				n;
@@ -495,7 +513,7 @@ int main(int argc, char **argv)
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family      = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr.sin_port        = htons(SERV_PORT+5);
+	servaddr.sin_port        = htons(SERV_PORT+6);
 
 	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
 
@@ -515,7 +533,7 @@ int main(int argc, char **argv)
 	bzero(client_list, sizeof(client_list));
 
 	char* 	  bye_msg = "Bye!\n";
-	char*	  create_room_error_msg = "(CREATE ROOM FAIL!)\n";
+	char*	  create_room_error_msg = "(Exceed the maximum number of rooms!)\n";
 	char*	  enter_room_error_msg1 = "(Please specify the room id!)\n";
 	char*	  enter_room_error_msg2 = "(This Room not exist!)\n";
 	char*	  enter_room_error_msg3 = "(This Room is full!)\n";
@@ -654,6 +672,7 @@ int main(int argc, char **argv)
 			char client_id_tmp[MAXID];
 			if ( (n = Read(connfd_tmp, client_id_tmp, MAXID)) == 0) {
 				printf("Read error\n");
+				close(connfd_tmp);
 				continue;
 			}
 			//printf("New client ID: %s\n", client_id_tmp);
@@ -826,7 +845,7 @@ int main(int argc, char **argv)
 						}
 					}
 					bool flag = 1;
-					char* room_msg0 = "\nAvailable Room List\n";\
+					char* room_msg0 = "br\nAvailable Room List\n";\
 					strcat(sendline, room_msg0);
 					for(int j = 0; j < MAXROOM; j++){
 						char buf[30];

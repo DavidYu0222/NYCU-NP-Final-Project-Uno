@@ -12,7 +12,7 @@
 #include    <ctype.h>
 
 // Server setting constant
-#define MAXCLIENT 	10
+#define MAXCLIENT 	20
 #define MAXROOM 	5
 #define MAXMEMBER 	4
 #define MAXID 		50
@@ -90,5 +90,6 @@ typedef struct {
 }Status;
 
 Status uno_game(int numOfPlayer, Member* members);
+bool isNumber(char *str);
 
 #endif // SERV1_H

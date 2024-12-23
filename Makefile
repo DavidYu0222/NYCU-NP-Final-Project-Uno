@@ -13,6 +13,8 @@ serv:	serv1.o uno.o
 cli:	cli.o
 		${CC} ${CFLAGS} -o $@ cli.o ${LIBS}
 
+# test:	test.o
+# 		g++ -o $@ test.o -lsfml-graphics -lsfml-window -lsfml-system
 
 clean:
 		rm -f ${PROGS} ${CLEANFILES}
