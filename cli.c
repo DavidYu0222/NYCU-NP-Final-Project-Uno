@@ -5,11 +5,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-char* id = "handshake";
-
-/* the following two functions use ANSI Escape Sequence */
-/* refer to https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797 */
-
+char* hello_msg = "handshake";
 
 void clr_scr() {
 	printf("\x1B[2J");
@@ -28,8 +24,7 @@ void xchg_data(FILE *fp, int sockfd)
 	
 	set_scr();
 	clr_scr();
-    Writen(sockfd, id, strlen(id));
-    //printf("sent: %s\n", id);
+    Writen(sockfd, hello_msg, strlen(hello_msg));
     stdineof = 0;
 	peer_exit = 0;
 
@@ -126,7 +121,7 @@ main(int argc, char **argv)
 
 	Connect(sockfd, (SA *) &servaddr, sizeof(servaddr));
 
-	xchg_data(stdin, sockfd);		/* do it all */
+	xchg_data(stdin, sockfd);
 
 	exit(0);
 }

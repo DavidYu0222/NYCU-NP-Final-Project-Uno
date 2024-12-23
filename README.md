@@ -7,7 +7,7 @@ g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
 
 GNU Make 4.3
 
-SFML
+<!-- SFML
 ```shell
 sudo apt-get install libsfml-dev
 ```
@@ -23,7 +23,7 @@ sudo add-apt-repository ppa:oibaf/graphics-drivers
 sudo apt update
 
 sudo apt upgrade
-```
+``` -->
 
 # Run server
 Put the project under unpv13e directory
